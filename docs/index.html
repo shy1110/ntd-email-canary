@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>NTD Email Notification Monitor</title>
+<style>
+  :root{--green:#1fb83a;--red:#e02020}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:#f6f8fb;color:#111}
+  header{background:linear-gradient(90deg,#0b3c8c,#1559b8);color:#fff;padding:18px 24px;display:flex;align-items:center;gap:16px}
+  header .logo{font-weight:900;font-style:italic;font-size:30px;letter-spacing:-1px}
+  header .sep{width:1px;height:32px;background:rgba(255,255,255,.5)}
+  header .title{font-size:24px;font-weight:600}
+  main{max-width:860px;margin:20px auto;padding:0 16px}
+  .banner{display:flex;align-items:center;gap:20px;padding:20px 24px;border-radius:16px;border:2px solid}
+  .banner.ok{background:#e6f9e9;border-color:#8ee09e;color:#0a4d17}
+  .banner.bad{background:#fde8e8;border-color:#f19a9a;color:#7a0b0b}
+  .banner h1{margin:0;font-size:28px}
+  .banner small{display:block;margin-top:6px;font-size:15px;color:#444;font-weight:400}
+  .lamp{width:56px;height:56px;border-radius:50%;flex:none;border:4px solid #333}
+  .lamp.g{background:radial-gradient(circle at 35% 30%,#b6ffc0,#1fb83a 60%,#0e7a22)}
+  .lamp.r{background:radial-gradient(circle at 35% 30%,#ffb3b3,#e02020 60%,#8a0d0d)}
+  .grid{display:grid;grid-template-columns:2fr 1fr;gap:14px;margin-top:14px}
+  @media(max-width:640px){.grid{grid-template-columns:1fr}}
+  .card{background:#fff;border:1px solid #dde3ec;border-radius:14px;padding:16px 20px}
+  .check{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 0}
+  .check+.check{border-top:1px solid #eef1f6}
+  .check b{font-size:18px}
+  .check small{display:block;color:#666;margin-top:3px}
+  .dot{width:24px;height:24px;border-radius:50%;flex:none}
+  .dot.g{background:radial-gradient(circle at 35% 30%,#b6ffc0,#1fb83a 65%,#0e7a22)}
+  .dot.r{background:radial-gradient(circle at 35% 30%,#ffb3b3,#e02020 65%,#8a0d0d)}
+  .interval{display:flex;align-items:center;gap:10px;font-size:16px;color:#444}
+  .interval b{font-size:26px;color:#111}
+  .rhead{display:flex;justify-content:space-between;align-items:center;margin:24px 0 10px;flex-wrap:wrap;gap:8px}
+  .rhead h2{margin:0;font-size:26px}
+  .legend{display:flex;gap:16px;font-size:15px;font-weight:600;align-items:center}
+  .legend .dot{width:16px;height:16px;display:inline-block;vertical-align:middle;margin-right:6px}
+  .runs{display:flex;flex-wrap:wrap;gap:10px;padding:18px}
+  .runs .dot{width:22px;height:22px;cursor:default}
+  .err{color:#b00;font-size:14px;margin-top:4px;word-break:break-word}
+  footer{color:#888;font-size:13px;text-align:center;margin:24px 0}
+</style></head>
+<body>
+<header><span class="logo">NTD</span><span class="sep"></span><span class="title">Email Monitor</span></header>
+<main>
+  <div id="banner" class="banner"><div class="lamp g"></div><div><h1>Loading…</h1></div></div>
+  <div class="grid">
+    <div class="card" id="checks"></div>
+    <div class="card interval">⏱ Check interval: <b id="interval">3 hours</b></div>
+  </div>
+  <div class="rhead">
+    <h2>Recent runs</h2>
+    <div class="legend">
+      <span><i class="dot g"></i>Success</span><span><i class="dot r"></i>Failed</span>
+    </div>
+  </div>
+  <div class="card runs" id="runs"></div>
+  <footer>Auto-refreshes every minute</footer>
+</main>
+<script>
+const INTERVAL_HOURS = 3;                      // 与 workflow 的 cron 保持一致
+const STALE_HOURS = INTERVAL_HOURS * 2 + 0.5;  // 超过这个时间没更新就判定监控停了
+const LABELS = {
+  "Passwordless": "Login Without Password Email",
+  "Reset Password": "Reset Password Email"
+};
+document.getElementById("interval").textContent = INTERVAL_HOURS + " hours";
+
+function ago(d){
+  const m = Math.round((Date.now()-d)/60000);
+  if(m < 1) return "just now";
+  if(m < 60) return m + " minute" + (m>1?"s":"") + " ago";
+  const h = Math.floor(m/60);
+  if(h < 48) return h + " hour" + (h>1?"s":"") + " ago";
+  return Math.floor(h/24) + " days ago";
+}
+
+async function load(){
+  const d = await (await fetch("status.json?"+Date.now())).json();
+  const hist = d.history || [];
+  const last = new Date(d.last_run);
+  const staleH = (Date.now()-last)/36e5;
+  const stale = staleH > STALE_HOURS;
+
+  const latest = {};
+  hist.forEach(x => latest[x.name] = x);
+  const failing = Object.values(latest).filter(x => !x.ok);
+  const bad = stale || failing.length > 0;
+
+  const title = stale ? "Monitor is not running"
+              : failing.length ? "Email delivery problem"
+              : "All Emails: OK";
+  const sub = stale
+    ? "No check for " + staleH.toFixed(1) + " hours (last: " + last.toLocaleString() + ")"
+    : "Last check: " + last.toLocaleString() + " (" + ago(last) + ")";
+
+  const b = document.getElementById("banner");
+  b.className = "banner " + (bad ? "bad" : "ok");
+  b.innerHTML = `<div class="lamp ${bad?"r":"g"}"></div>
+                 <div><h1>${title}</h1><small>${sub}</small></div>`;
+
+  document.getElementById("checks").innerHTML = Object.values(latest).map(x => {
+    const lastOk = [...hist].reverse().find(h => h.name===x.name && h.ok);
+    return `<div class="check">
+      <div><b>✉ ${LABELS[x.name] || x.name}</b>
+        <small>${x.ok ? "Last success: " + ago(new Date(x.time))
+                      : "Last success: " + (lastOk ? ago(new Date(lastOk.time)) : "never")}</small>
+        ${x.ok ? "" : `<div class="err">${x.detail}</div>`}
+      </div><i class="dot ${x.ok?"g":"r"}"></i></div>`;
+  }).join("");
+
+  document.getElementById("runs").innerHTML = hist.slice(-40).map(x =>
+    `<i class="dot ${x.ok?"g":"r"}" title="${LABELS[x.name]||x.name} · ${new Date(x.time).toLocaleString()} · ${x.ok?"OK":x.detail}"></i>`
+  ).join("");
+}
+load(); setInterval(load, 60000);
+</script>
+</body></html>
