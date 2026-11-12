@@ -1,0 +1,41 @@
+name: email-canary
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: canary
+  cancel-in-progress: false
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install playwright requests
+      - run: playwright install --with-deps chromium
+      - name: Run canary
+        run: python canary.py
+        env:
+          TEST_EMAIL: ${{ secrets.TEST_EMAIL }}
+          APP_PASSWORD: ${{ secrets.APP_PASSWORD }}
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      - name: Save status
+        if: always()
+        run: |
+          git config user.name "canary-bot"
+          git config user.email "bot@users.noreply.github.com"
+          git add docs/status.json
+          git diff --cached --quiet || git commit -m "update status"
+          git pull --rebase
+          git push
+      - name: Notify if the job itself crashed
+        if: failure()
+        run: |
+          curl -s "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage" \
+            -d chat_id=${{ secrets.TELEGRAM_CHAT_ID }} \
+            -d text="Canary workflow crashed. Check GitHub Actions."
