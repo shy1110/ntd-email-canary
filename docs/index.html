@@ -90,7 +90,7 @@ async function load(){
 
   const title = stale ? "Monitor is not running"
               : failing.length ? "Email delivery problem"
-              : "All Emails: OK";
+              : "Emails Notification Status: OK";
   const sub = stale
     ? "No check for " + staleH.toFixed(1) + " hours (last: " + last.toLocaleString() + ")"
     : "Last check: " + last.toLocaleString() + " (" + ago(last) + ")";
