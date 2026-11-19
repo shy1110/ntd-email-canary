@@ -162,9 +162,10 @@ def run_check(page, name, trigger, subject_kw):
     print(f"   ✅ Received: '{subj}' folder={folder} delay={delay}s")
     if folder != "INBOX":
         return f"{name}: Email went to spam ({subj})"
+    # run_check 末尾
     if delay > 120:
         return f"{name}: Email delayed {delay}s ({subj})"
-    return None
+    return f"OK_INFO:Received in {delay}s"   # 改这里
 
 
 def discover():
@@ -211,7 +212,12 @@ def main():
         browser.close()
 
     save_status(results)
-    problems = [r["detail"] for r in results if not r["ok"]]
+    # main() 里
+    err = run_check(page, name, trig, kw)
+    is_ok = err is None or err.startswith("OK_INFO:")
+    detail = (err or "").replace("OK_INFO:", "")
+    results.append({"name": name, "ok": is_ok, "detail": detail})
+    problems = [r["detail"] for r in results if not r["ok"]]  # 这行保持不变
     if problems:
         send_alert("\n".join(problems))   # already reported via Telegram + status page
         return
