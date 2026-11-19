@@ -12,7 +12,7 @@ TELEGRAM_CHAT_ID = os.environ["TELEGRAM_CHAT_ID"]
 
 LOGIN_URL = "https://www.ntd.com/"
 SUBJECT_RESET = "Please reset your password"
-SUBJECT_PASSWORDLESS = "Use this link to log in"
+SUBJECT_PASSWORDLESS = "Use this link to log in(Test)"
 MAX_CHECKS = 5          # check the mailbox at most 5 times
 CHECK_INTERVAL = 20     # seconds between checks
 os.makedirs("screenshots", exist_ok=True)
