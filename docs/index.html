@@ -37,12 +37,11 @@
   .legend{display:flex;gap:16px;font-size:15px;font-weight:600;align-items:center}
   .legend .dot{width:16px;height:16px;display:inline-block;vertical-align:middle;margin-right:6px}
   .runs{display:flex;flex-wrap:wrap;gap:10px;padding:18px}
-  .runs .dot{width:22px;height:22px;cursor:default}
-  .err{color:#b00;font-size:14px;margin-top:4px;word-break:break-word}
-  footer{color:#888;font-size:13px;text-align:center;margin:24px 0}
-  .runs .dot{cursor:pointer;transition:transform .12s}
+  .runs .dot{width:22px;height:22px;cursor:pointer;transition:transform .12s}
   .runs .dot:hover{transform:scale(1.35)}
   .runs .dot.sel{outline:3px solid #0b3c8c;outline-offset:2px}
+  .err{color:#b00;font-size:14px;margin-top:4px;word-break:break-word}
+  footer{color:#888;font-size:13px;text-align:center;margin:24px 0}
   #tip{position:fixed;z-index:10;display:none;pointer-events:none;background:#111;color:#fff;
     padding:8px 12px;border-radius:8px;font-size:13px;line-height:1.5;max-width:280px;
     box-shadow:0 4px 14px rgba(0,0,0,.25)}
@@ -89,6 +88,56 @@ function ago(d){
   return Math.floor(h/24) + " days ago";
 }
 
+// ---------- 运行详情（放在 load() 外面） ----------
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+let shown = [], selected = null;
+
+function fmt(x){
+  const t = new Date(x.time);
+  return {
+    label: LABELS[x.name] || x.name,
+    time: t.toLocaleString(),
+    ago: ago(t),
+    status: x.ok ? "Success" : "Failed",
+    detail: x.detail || (x.ok ? "Email arrived in inbox on time" : "(no detail)")
+  };
+}
+
+function showDetail(i){
+  selected = i;
+  const f = fmt(shown[i]), ok = shown[i].ok;
+  const d = document.getElementById("detail");
+  d.style.display = "block";
+  d.innerHTML = `<h3>Run details</h3>
+    <div class="row"><span>Check</span><span>${esc(f.label)}</span></div>
+    <div class="row"><span>Time</span><span>${esc(f.time)} (${esc(f.ago)})</span></div>
+    <div class="row"><span>Result</span><span style="color:${ok?"#0a7a22":"#b00"};font-weight:600">${f.status}</span></div>
+    <div class="row"><span>Detail</span><span>${esc(f.detail)}</span></div>`;
+  document.querySelectorAll("#runs .dot").forEach((el,k)=>el.classList.toggle("sel", k===i));
+}
+
+function renderRuns(){
+  const runs = document.getElementById("runs");
+  runs.innerHTML = shown.map((x,i) =>
+    `<i class="dot ${x.ok?"g":"r"}${i===selected?" sel":""}" data-i="${i}"></i>`).join("");
+  const tip = document.getElementById("tip");
+  runs.querySelectorAll(".dot").forEach(el => {
+    const i = +el.dataset.i;
+    el.addEventListener("mouseenter", () => {
+      const f = fmt(shown[i]);
+      tip.innerHTML = `<b>${esc(f.label)}</b><br>${esc(f.time)}<br>
+        <span class="${shown[i].ok?"ok":"bad"}">${f.status}</span> · ${esc(f.detail)}`;
+      tip.style.display = "block";
+      const r = el.getBoundingClientRect();
+      tip.style.left = Math.max(8, Math.min(r.left - 20, innerWidth - tip.offsetWidth - 8)) + "px";
+      tip.style.top = (r.top - tip.offsetHeight - 10) + "px";
+    });
+    el.addEventListener("mouseleave", () => tip.style.display = "none");
+    el.addEventListener("click", () => showDetail(i));
+  });
+}
+
+// ---------- 主加载 ----------
 async function load(){
   const d = await (await fetch("status.json?"+Date.now())).json();
   const hist = d.history || [];
@@ -119,58 +168,10 @@ async function load(){
       <div><b>✉ ${LABELS[x.name] || x.name}</b>
         <small>${x.ok ? "Last success: " + ago(new Date(x.time))
                       : "Last success: " + (lastOk ? ago(new Date(lastOk.time)) : "never")}</small>
-        ${x.ok ? "" : `<div class="err">${x.detail}</div>`}
+        ${x.ok ? "" : `<div class="err">${esc(x.detail)}</div>`}
       </div><i class="dot ${x.ok?"g":"r"}"></i></div>`;
   }).join("");
 
-  const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-  let shown = [], selected = null;
-  
-  function fmt(x){
-    const t = new Date(x.time);
-    return {
-      label: LABELS[x.name] || x.name,
-      time: t.toLocaleString(),
-      ago: ago(t),
-      status: x.ok ? "Success" : "Failed",
-      detail: x.detail || (x.ok ? "Email arrived in inbox on time" : "(no detail)")
-    };
-  }
-  
-  function showDetail(i){
-    selected = i;
-    const f = fmt(shown[i]), ok = shown[i].ok;
-    const d = document.getElementById("detail");
-    d.style.display = "block";
-    d.innerHTML = `<h3>Run details</h3>
-      <div class="row"><span>Check</span><span>${esc(f.label)}</span></div>
-      <div class="row"><span>Time</span><span>${esc(f.time)} (${esc(f.ago)})</span></div>
-      <div class="row"><span>Result</span><span style="color:${ok?"#0a7a22":"#b00"};font-weight:600">${f.status}</span></div>
-      <div class="row"><span>Detail</span><span>${esc(f.detail)}</span></div>`;
-    document.querySelectorAll("#runs .dot").forEach((el,k)=>el.classList.toggle("sel", k===i));
-  }
-  
-  function renderRuns(){
-    const runs = document.getElementById("runs");
-    runs.innerHTML = shown.map((x,i) =>
-      `<i class="dot ${x.ok?"g":"r"}${i===selected?" sel":""}" data-i="${i}"></i>`).join("");
-    const tip = document.getElementById("tip");
-    runs.querySelectorAll(".dot").forEach(el => {
-      const i = +el.dataset.i;
-      el.addEventListener("mouseenter", () => {
-        const f = fmt(shown[i]);
-        tip.innerHTML = `<b>${esc(f.label)}</b><br>${esc(f.time)}<br>
-          <span class="${shown[i].ok?"ok":"bad"}">${f.status}</span> · ${esc(f.detail)}`;
-        tip.style.display = "block";
-        const r = el.getBoundingClientRect();
-        tip.style.left = Math.max(8, Math.min(r.left - 20, innerWidth - tip.offsetWidth - 8)) + "px";
-        tip.style.top = (r.top - tip.offsetHeight - 10) + "px";
-      });
-      el.addEventListener("mouseleave", () => tip.style.display = "none");
-      el.addEventListener("click", () => showDetail(i));
-    });
-  }
-}
   shown = hist.slice(-40);
   renderRuns();
   if (selected !== null && shown[selected]) showDetail(selected);
