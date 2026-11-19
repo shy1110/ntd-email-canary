@@ -171,6 +171,10 @@ async function load(){
     });
   }
 }
+  shown = hist.slice(-40);
+  renderRuns();
+  if (selected !== null && shown[selected]) showDetail(selected);
+}
 load(); setInterval(load, 60000);
 </script>
 </body></html>
