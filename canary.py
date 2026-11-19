@@ -132,7 +132,7 @@ def save_status(results):
     data["last_run"] = now
     for r in results:
         data["history"].append({**r, "time": now})
-    data["history"] = data["history"][-300:]
+    data["history"] = data["history"][-25:]
     json.dump(data, open(path, "w"), indent=2)
 
 
