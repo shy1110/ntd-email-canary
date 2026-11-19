@@ -208,18 +208,15 @@ def main():
         for key in selected:
             name, trig, kw = checks[key]
             err = run_check(page, name, trig, kw)
-            results.append({"name": name, "ok": err is None, "detail": err or ""})
+            is_ok = err is None or err.startswith("OK_INFO:")
+            detail = (err or "").replace("OK_INFO:", "")
+            results.append({"name": name, "ok": is_ok, "detail": detail})
         browser.close()
 
     save_status(results)
-    # main() 里
-    err = run_check(page, name, trig, kw)
-    is_ok = err is None or err.startswith("OK_INFO:")
-    detail = (err or "").replace("OK_INFO:", "")
-    results.append({"name": name, "ok": is_ok, "detail": detail})
-    problems = [r["detail"] for r in results if not r["ok"]]  # 这行保持不变
+    problems = [r["detail"] for r in results if not r["ok"]]
     if problems:
-        send_alert("\n".join(problems))   # already reported via Telegram + status page
+        send_alert("\n".join(problems))
         return
     print("\n✅ All tests passed")
 
